@@ -1,0 +1,56 @@
+#!/bin/bash
+
+# Warna menggunakan tput
+GREEN=$(tput setaf 2)    # Hijau
+RED=$(tput setaf 1)      # Merah
+BLUE=$(tput setaf 4)     # Biru
+YELLOW=$(tput setaf 3)   # Kuning
+NC=$(tput sgr0)          # Reset warna
+
+# Fungsi untuk mencetak garis pemisah
+print_line() {
+    echo -e "${BLUE}========================================${NC}"
+}
+
+# Periksa status container Docker Marzban
+check_container_status() {
+    local container_name="marzban-marzban-1"
+    local status=$(docker inspect -f '{{.State.Running}}' "$container_name" 2>/dev/null)
+    echo -e "${BLUE}Docker Container:${NC}"
+    if [ "$status" == "true" ]; then
+        echo -e "  ${GREEN}Marzban is running.${NC}"
+    else
+        echo -e "  ${RED}Marzban is not running.${NC}"
+    fi
+}
+
+# Periksa status Fix Instances service
+check_fix_instances_status() {
+    local status=$(systemctl is-active fix.service)
+    echo -e "${BLUE}Fix Instances Service:${NC}"
+    if [ "$status" == "active" ]; then
+        echo -e "  ${GREEN}Fix Instances is active.${NC}"
+    else
+        echo -e "  ${RED}Fix Instances is not active.${NC}"
+    fi
+}
+
+# Cek penggunaan data tahunan dengan vnstat
+check_vnstat_usage() {
+    echo -e "${BLUE}Annual Data Usage (vnStat):${NC}"
+    if ! command -v vnstat &> /dev/null; then
+        echo -e "  ${RED}vnStat is not installed. Please install vnstat.${NC}"
+    else
+        vnstat --oneline | awk -F';' -v GREEN="$GREEN" -v YELLOW="$YELLOW" -v NC="$NC" '{
+            printf "  %sInterface:%s %s\n", YELLOW, NC, $1;
+            printf "  %sTotal Data:%s %s\n", GREEN, NC, $13;
+        }'
+    fi
+}
+
+# Eksekusi fungsi
+print_line
+check_container_status
+check_fix_instances_status
+check_vnstat_usage
+print_line

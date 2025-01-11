@@ -1,0 +1,120 @@
+#!/bin/bash
+
+# Deteksi IP publik
+PUBLIC_IP=$(curl -s ifconfig.me)
+
+# Cek dan instal `zip` jika tidak ada
+if ! command -v zip &> /dev/null; then
+  echo "zip tidak ditemukan. Menginstal zip..."
+  if [ -f /etc/debian_version ]; then
+    sudo apt update && sudo apt install zip -y
+  elif [ -f /etc/redhat-release ]; then
+    sudo yum install zip -y
+  else
+    echo "Distribusi tidak didukung. Instal zip secara manual."
+    exit 1
+  fi
+fi
+
+# Prompt untuk input Chat ID dan Bot Token
+read -p "Enter your Telegram Chat ID: " CHAT_ID
+read -p "Enter your Telegram Bot Token: " BOT_TOKEN
+
+# Verifikasi Bot Token dan Chat ID dengan memeriksa API
+TEST_RESULT=$(curl -s "https://api.telegram.org/bot${BOT_TOKEN}/getMe")
+if [[ $(echo "$TEST_RESULT" | grep '"ok":true') ]]; then
+  echo "Bot Token valid. Melanjutkan..."
+else
+  echo "Bot Token salah. Proses dibatalkan."
+  exit 1
+fi
+
+# Prompt untuk input deskripsi custom backup
+read -p "Enter a custom description for this backup (leave blank for default): " BACKUP_DESCRIPTION
+if [ -z "$BACKUP_DESCRIPTION" ]; then
+  BACKUP_DESCRIPTION="marzban backup"
+fi
+
+# Pilih mode backup
+echo "Pilih mode backup:"
+echo "1. Backup semua folder tanpa pengecualian"
+echo "2. Backup dengan pengecualian (sqlite only)"
+read -p "Masukkan pilihan Anda (1-2): " backup_choice
+
+# Buat skrip backup
+BACKUP_SCRIPT="/usr/local/bin/marzban-backup"
+cat <<EOF > $BACKUP_SCRIPT
+#!/bin/bash
+
+# Hapus file backup lama
+rm -rf /root/marzban-backup.zip
+
+EOF
+
+if [[ $backup_choice -eq 1 ]]; then
+  cat <<EOF >> $BACKUP_SCRIPT
+# Buat file ZIP untuk semua folder
+zip -r /root/marzban-backup.zip /opt/marzban/* /var/lib/marzban/* /opt/marzban/.env
+EOF
+elif [[ $backup_choice -eq 2 ]]; then
+  cat <<EOF >> $BACKUP_SCRIPT
+# Buat file ZIP dengan pengecualian folder tertentu
+zip -r /root/marzban-backup.zip /opt/marzban/* /var/lib/marzban/* /opt/marzban/.env --exclude "/var/lib/marzban/assets/*" "/var/lib/marzban/xray-core/*" "/var/lib/marzban/certs/*" "/var/lib/marzban/templates/*"
+EOF
+else
+  echo "Pilihan tidak valid. Membatalkan proses."
+  exit 1
+fi
+
+cat <<EOF >> $BACKUP_SCRIPT
+# Tambahkan catatan ke dalam file ZIP
+echo -e "$BACKUP_DESCRIPTION\n$PUBLIC_IP\nModified by @aixxycodes" | zip -z /root/marzban-backup.zip
+
+# Unggah file backup ke Telegram
+curl -F chat_id="$CHAT_ID" \
+     -F caption=\$'\n\n<b>Backup Description:</b> \n$BACKUP_DESCRIPTION\n\n<b>Public IP:</b>\n<code>$PUBLIC_IP</code>\n\n<i>Modified by @aixxycodes</i>' \
+     -F parse_mode="HTML" \
+     -F document=@"/root/marzban-backup.zip" \
+     https://api.telegram.org/bot$BOT_TOKEN/sendDocument
+EOF
+
+# Beri izin eksekusi
+chmod +x $BACKUP_SCRIPT
+
+# Periksa dan hapus cron job lama
+crontab -l 2>/dev/null | grep -v "marzban-backup" | crontab -
+
+# Tambahkan menu untuk cron job
+echo "Pilih interval untuk menjalankan backup otomatis:"
+echo "1. 24 jam sekali"
+echo "2. 12 jam sekali"
+echo "3. 6 jam sekali"
+echo "4. Tidak menambahkan cron job"
+read -p "Masukkan pilihan Anda (1-4): " cron_choice
+
+CRON_JOB=""
+case $cron_choice in
+  1)
+    CRON_JOB="0 0 * * * $BACKUP_SCRIPT"
+    ;;
+  2)
+    CRON_JOB="0 */12 * * * $BACKUP_SCRIPT"
+    ;;
+  3)
+    CRON_JOB="0 */6 * * * $BACKUP_SCRIPT"
+    ;;
+  4)
+    echo "Cron job tidak ditambahkan."
+    ;;
+  *)
+    echo "Pilihan tidak valid. Cron job tidak ditambahkan."
+    ;;
+esac
+
+# Tambahkan cron job baru jika dipilih
+if [[ ! -z "$CRON_JOB" ]]; then
+  (crontab -l 2>/dev/null; echo "$CRON_JOB") | crontab -
+  echo "Cron job baru berhasil ditambahkan."
+fi
+
+echo "Installer selesai. Anda dapat menjalankan backup manual dengan perintah 'marzban-backup'."
