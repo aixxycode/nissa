@@ -50,7 +50,7 @@ net.ipv6.conf.lo.disable_ipv6=1' >> /etc/sysctl.conf
 sysctl -p;
 
 # Install Marzban
-sudo bash -c "$(curl -sL https://github.com/aixxycode/Marzban-scripts/raw/master/marzban.sh)" @ install
+sudo bash -c "$(curl -sL https://github.com/Gozargah/Marzban-scripts/raw/master/marzban.sh)" @ install
 
 # Install socat
 apt install iptables cron socat -y
