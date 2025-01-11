@@ -12,5 +12,5 @@ marzban cli admin create --sudo
 ```
 Backup-marzdaf
 ```bash
-bash <(curl -s https://raw.githubusercontent.com/aixxycode/marzdaf/main/marzdaf-backup)
+bash <(curl -s https://raw.githubusercontent.com/aixxycode/nissa/main/marzdaf-backup)
 ```
